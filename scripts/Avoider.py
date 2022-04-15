@@ -12,9 +12,9 @@ class Avoider():
 	                     "front_L":  1, "front_C":  0, "front_R": -1,
 	                 	}
 
-	def __init__(self, vel_obj, obstacle_threshold=2.1, 
-				       regional_angle=30, normal_lin_vel=1.0, 
-				       trans_lin_vel=4.0, trans_ang_vel=12.0):
+	def __init__(self, vel_obj, obstacle_threshold=1.9, 
+				       regional_angle=30, normal_lin_vel=7.0, 
+				       trans_lin_vel=2.91, trans_ang_vel=0.0):
 		'''
 		:param vel_obj           : Velocity object; will contain velocity commands(data); Twist()
 		:param obstacle_threshold: Objects at this distance or below are considered obstacles
@@ -30,6 +30,7 @@ class Avoider():
 		self.NORMAL_LIN_VEL = normal_lin_vel
 		self.TRANS_LIN_VEL  = trans_lin_vel
 		self.TRANS_ANG_VEL  = trans_ang_vel
+		self.MAX_CENTER_LEN = 213
 
 	def indentify_regions(self, scan):
 		'''
@@ -43,13 +44,14 @@ class Avoider():
 		#intermediary = scan.ranges[:int(self.REGIONAL_ANGLE/2)] + scan.ranges[(len(scan.ranges)-1)*int(self.REGIONAL_ANGLE/2):]
 		#self.Regions_Report["front_C"] = [x for x in intermediary if x <= self.OBSTACLE_DIST and x != 'inf']
 		
-		self.Regions_Report["front_L"] = scan.ranges[-1:2*(int(len(scan.ranges)/len(REGIONS))):-1]
+		self.Regions_Report["front_L"] = scan.ranges[-1:2*(int(len(scan.ranges)/len(REGIONS)))+71:-1]
 		#print(self.Regions_Report["front_L"])
 		
-		self.Regions_Report["front_C"] = scan.ranges[2*(int(len(scan.ranges)/len(REGIONS)))-1:int(len(scan.ranges)/len(REGIONS)):-1]
+		self.Regions_Report["front_C"] = scan.ranges[2*(int(len(scan.ranges)/len(REGIONS)))+70:int(len(scan.ranges)/len(REGIONS))-70:-1]
+		self.MAX_CENTER_LEN = len(scan.ranges[2*(int(len(scan.ranges)/len(REGIONS)))+70:int(len(scan.ranges)/len(REGIONS))-70:-1])
 		#print(self.Regions_Report["front_C"])
 		
-		self.Regions_Report["front_R"] = scan.ranges[int(len(scan.ranges)/len(REGIONS))-1:0:-1]
+		self.Regions_Report["front_R"] = scan.ranges[int(len(scan.ranges)/len(REGIONS))-71:0:-1]
 		#print(self.Regions_Report["front_R"])
 		
 		#print(intermediary)
@@ -87,7 +89,7 @@ class Avoider():
 					maxima["distance"] = self.OBSTACLE_DIST
 					maxima["destination"] = region[0]
 			#check if it's the clearest option
-			elif((max(region[1]) > maxima["distance"])):
+			elif((max(region[1]) > maxima["distance"]) and maxima["max_length"]>len(region[1])):
 				#print('else')
 				maxima["max_length"] = len(region[1])
 				maxima["distance"] = max(region[1])
@@ -96,7 +98,7 @@ class Avoider():
 		regional_dist = self.Regions_Distances[maxima["destination"]]-self.Regions_Distances[goal]
 
 		# Return whether to act or not, and the angular velocity with the appropriate sign
-		return (closest != 0), (regional_dist/[abs(regional_dist) if regional_dist != 0 else 1][0])*self.TRANS_ANG_VEL
+		return (closest != 0), (regional_dist/[abs(regional_dist) if regional_dist != 0 else 1][0])
 
 	def _steer(self, steer=False, ang_vel=0):
 		'''
@@ -107,8 +109,10 @@ class Avoider():
 			self.vel_obj.linear.x = self.NORMAL_LIN_VEL
 			self.vel_obj.linear.y = 0
 		else:
-			self.vel_obj.linear.x = self.TRANS_LIN_VEL * 0.3
-			self.vel_obj.linear.y = self.TRANS_LIN_VEL * (ang_vel/abs(ang_vel))
+			speed_perc = len(self.Regions_Report["front_C"])/self.MAX_CENTER_LEN
+			self.vel_obj.linear.x = 0#self.TRANS_LIN_VEL * 0.1
+			self.vel_obj.linear.y = speed_perc * self.TRANS_LIN_VEL * (ang_vel/[abs(ang_vel) if ang_vel !=0 else 1][0])
+			print(len(self.Regions_Report["front_C"])/self.MAX_CENTER_LEN)
 		self.vel_obj.linear.z  = 0
 		self.vel_obj.angular.x = 0
 		self.vel_obj.angular.y = 0
